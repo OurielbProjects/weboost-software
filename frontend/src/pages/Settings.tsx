@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import axios from '../utils/api';
-import { Settings as SettingsIcon, Upload, X, Image as ImageIcon, Building2, Mail, Phone, MapPin, Save, FileText, AlertCircle, Headphones } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, Building2, Mail, Phone, MapPin, Save, FileText, AlertCircle, Headphones } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 interface Settings {

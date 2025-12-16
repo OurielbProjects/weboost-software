@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+
+// Charger le fichier .env depuis le répertoire backend
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
 import { pool } from './database/connection';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -19,19 +24,36 @@ import { migrateCompanyNumber } from './database/migrate-company-number';
 import { migrateApiKeys } from './database/migrate-api-keys';
 import { migrateEmailSettings } from './database/migrate-email-settings';
 import { migrateInvoices } from './database/migrate-invoices';
+import { securityHeaders, apiLimiter, validateInput } from './middleware/security';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Vérifier que JWT_SECRET est configuré et sécurisé
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'secret') {
+  console.error('❌ ERREUR CRITIQUE: JWT_SECRET doit être configuré avec une valeur sécurisée dans .env');
+  console.error('Générez un secret avec: openssl rand -base64 32');
+  process.exit(1);
+}
+
+// Middleware de sécurité - DOIT être en premier
+app.use(securityHeaders);
+app.use(apiLimiter);
+app.use(validateInput);
+
+// CORS avec configuration sécurisée
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
+  origin: process.env.FRONTEND_URL || 'https://software.weboost-il.com',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Limiter la taille des requêtes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Servir les fichiers statiques (logos, contrats)
 app.use('/uploads', express.static('uploads'));

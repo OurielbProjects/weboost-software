@@ -1,26 +1,30 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { 
-  LayoutDashboard, 
-  FolderKanban, 
-  Users, 
-  Bell, 
-  CheckSquare, 
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Users,
+  CheckSquare,
   Ticket,
   UserCog,
   Moon,
   Sun,
   LogOut,
   FileText,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Menu,
+  X,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [darkMode, setDarkMode] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const inactivityTimerRef = useRef<number | null>(null);
+  const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes
 
   useEffect(() => {
     const isDark = localStorage.getItem('darkMode') === 'true';
@@ -42,6 +46,38 @@ export default function Layout() {
     }
   };
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+
+    const resetTimer = () => {
+      if (inactivityTimerRef.current) {
+        window.clearTimeout(inactivityTimerRef.current);
+      }
+      inactivityTimerRef.current = window.setTimeout(() => {
+        setMobileMenuOpen(false);
+        logout();
+        alert('Session expirée pour inactivité (10 minutes). Veuillez vous reconnecter.');
+        navigate('/login');
+      }, INACTIVITY_LIMIT);
+    };
+
+    events.forEach((event) => window.addEventListener(event, resetTimer));
+    resetTimer();
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        window.clearTimeout(inactivityTimerRef.current);
+      }
+      events.forEach((event) => window.removeEventListener(event, resetTimer));
+    };
+  }, [logout, navigate, user]);
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -61,24 +97,81 @@ export default function Layout() {
     menuItems.push({ icon: UserCog, label: 'Users', path: '/users' });
   }
 
+  const brand = (
+    <div
+      className="text-xl font-bold"
+      style={{
+        fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+        letterSpacing: '-0.5px',
+      }}
+    >
+      <span className="text-[#06b6d4]">W</span>
+      <span className="text-gray-900 dark:text-white">eboost</span>
+      <span className="text-[#06b6d4]">.</span>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-screen fixed left-0 top-0">
-          <div className="p-6">
-            <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">WeBoost</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestion de Sites</p>
+    <>
+      {/* Mobile Top Bar - Fixed at top */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-14 flex items-center justify-between px-4">
+        <button
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          className="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+          aria-label="Ouvrir le menu"
+        >
+          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+        <div className="flex-1 flex justify-center">{brand}</div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+            aria-label="Basculer le mode"
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400"
+            aria-label="Déconnexion"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+      </header>
+
+      {/* Overlay for mobile menu */}
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Hidden on mobile when closed */}
+      <aside
+        className={`fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0`}
+      >
+        <div className="flex flex-col h-full">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700 hidden lg:block">
+            <div className="flex items-center mb-2">{brand}</div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Websites Manager</p>
           </div>
-          
-          <nav className="px-4 space-y-2">
+
+          <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
               return (
                 <button
                   key={item.path}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => {
+                    navigate(item.path);
+                    setMobileMenuOpen(false);
+                  }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
@@ -92,15 +185,15 @@ export default function Layout() {
             })}
           </nav>
 
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user?.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
               </div>
               <button
                 onClick={toggleDarkMode}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hidden lg:inline-flex flex-shrink-0 ml-2"
               >
                 {darkMode ? <Sun size={20} /> : <Moon size={20} />}
               </button>
@@ -113,14 +206,15 @@ export default function Layout() {
               <span>Déconnexion</span>
             </button>
           </div>
-        </aside>
+        </div>
+      </aside>
 
-        {/* Main content */}
-        <main className="flex-1 ml-64 p-8">
+      {/* Main content area */}
+      <div className="flex flex-col lg:flex-row min-h-screen w-full">
+        <main className="flex-1 pt-14 lg:pt-0 p-4 sm:p-6 lg:p-8 overflow-y-auto w-full">
           <Outlet />
         </main>
       </div>
-    </div>
+    </>
   );
 }
-

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from '../utils/api';
-import { FileText, Save, Eye, Code, Palette } from 'lucide-react';
+import { FileText, Save, Eye, Code, Palette, Mail, Send } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 interface ReportTemplate {
@@ -13,7 +13,7 @@ interface ReportTemplate {
 
 export default function Reports() {
   const { user } = useAuthStore();
-  const [templates, setTemplates] = useState<ReportTemplate[]>([]);
+  const [, setTemplates] = useState<ReportTemplate[]>([]);
   const [selectedType, setSelectedType] = useState<string>('bugs');
   const [currentTemplate, setCurrentTemplate] = useState<ReportTemplate>({
     type: 'bugs',
@@ -25,6 +25,16 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
+  const [activeTab, setActiveTab] = useState<'templates' | 'send'>('templates');
+  
+  // État pour l'envoi manuel
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProjects, setSelectedProjects] = useState<number[]>([]);
+  const [selectedReportType, setSelectedReportType] = useState<string>('bugs');
+  const [recipients, setRecipients] = useState<string>('');
+  const [customSubject, setCustomSubject] = useState<string>('');
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<any>(null);
 
   const reportTypes = [
     { type: 'bugs', label: 'Rapport de Bugs', description: 'Template pour les alertes de bugs' },
@@ -35,8 +45,38 @@ export default function Reports() {
   useEffect(() => {
     if (user?.role === 'admin') {
       fetchTemplates();
+      fetchProjects();
     }
   }, [user]);
+
+  // Préremplir les emails des clients lorsque des projets sont sélectionnés
+  useEffect(() => {
+    if (selectedProjects.length > 0 && projects.length > 0) {
+      // Récupérer les emails uniques des clients des projets sélectionnés
+      const selectedProjectsData = projects.filter(p => selectedProjects.includes(p.id));
+      const customerEmails = selectedProjectsData
+        .map(p => p.customer_email)
+        .filter((email): email is string => !!email && email.trim() !== '')
+        .filter((email, index, self) => self.indexOf(email) === index); // Supprimer les doublons
+      
+      if (customerEmails.length > 0) {
+        // Récupérer les emails actuels dans le champ
+        const currentEmails = recipients.split(',').map(e => e.trim()).filter(e => e);
+        
+        // Fusionner les emails des clients avec ceux déjà présents (sans doublons)
+        // On met les emails des clients en premier pour qu'ils soient visibles
+        const allEmails = [...new Set([...customerEmails, ...currentEmails])];
+        
+        // Ne mettre à jour que si les emails ont changé (pour éviter les boucles infinies)
+        const newRecipients = allEmails.join(', ');
+        if (newRecipients !== recipients) {
+          setRecipients(newRecipients);
+        }
+      }
+    }
+    // Note: On ne vide pas automatiquement le champ si les projets sont désélectionnés
+    // pour permettre à l'utilisateur de garder les emails qu'il a saisis
+  }, [selectedProjects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (selectedType) {
@@ -91,6 +131,15 @@ export default function Reports() {
     }
   };
 
+  const fetchProjects = async () => {
+    try {
+      const response = await axios.get('/api/projects');
+      setProjects(response.data.projects || []);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
   const handleSave = async () => {
     if (user?.role !== 'admin') return;
     
@@ -112,6 +161,46 @@ export default function Reports() {
     }
   };
 
+  const handleSendReport = async () => {
+    if (selectedProjects.length === 0) {
+      alert('Veuillez sélectionner au moins un projet');
+      return;
+    }
+
+    const recipientsList = recipients.split(',').map(email => email.trim()).filter(email => email);
+    if (recipientsList.length === 0) {
+      alert('Veuillez saisir au moins un destinataire');
+      return;
+    }
+
+    setSending(true);
+    setSendResult(null);
+    try {
+      const response = await axios.post('/api/reports/send', {
+        reportType: selectedReportType,
+        projectIds: selectedProjects,
+        recipients: recipientsList,
+        customSubject: customSubject || undefined,
+      });
+
+      setSendResult(response.data);
+      if (response.data.success) {
+        alert(`✅ ${response.data.sent} rapport(s) envoyé(s) avec succès !`);
+        // Réinitialiser le formulaire
+        setSelectedProjects([]);
+        setRecipients('');
+        setCustomSubject('');
+      } else {
+        alert(`⚠️ ${response.data.sent} envoyé(s), ${response.data.failed} échec(s)`);
+      }
+    } catch (error: any) {
+      console.error('Error sending report:', error);
+      alert(error.response?.data?.error || 'Erreur lors de l\'envoi');
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (user?.role !== 'admin') {
     return (
       <div className="text-center py-12">
@@ -129,10 +218,199 @@ export default function Reports() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Rapports</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Éditez les templates HTML/CSS pour vos rapports
+          Éditez les templates HTML/CSS et envoyez des rapports manuellement
         </p>
       </div>
 
+      {/* Onglets */}
+      <div className="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => setActiveTab('templates')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'templates'
+              ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+          }`}
+        >
+          <FileText size={20} className="inline mr-2" />
+          Templates
+        </button>
+        <button
+          onClick={() => setActiveTab('send')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'send'
+              ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+          }`}
+        >
+          <Mail size={20} className="inline mr-2" />
+          Envoyer un rapport
+        </button>
+      </div>
+
+      {/* Contenu de l'onglet Envoyer */}
+      {activeTab === 'send' && (
+        <div className="space-y-6">
+          <div className="card">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">
+              Envoyer un rapport manuellement
+            </h2>
+
+            {/* Type de rapport */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">Type de rapport</label>
+              <select
+                value={selectedReportType}
+                onChange={(e) => setSelectedReportType(e.target.value)}
+                className="input"
+              >
+                {reportTypes.map((type) => (
+                  <option key={type.type} value={type.type}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sélection des projets */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">
+                Projets ({selectedProjects.length} sélectionné(s))
+              </label>
+              <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 max-h-64 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+                {projects.length === 0 ? (
+                  <p className="text-gray-500 dark:text-gray-400">Aucun projet disponible</p>
+                ) : (
+                  <div className="space-y-2">
+                    {projects.map((project) => (
+                      <label key={project.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded">
+                        <input
+                          type="checkbox"
+                          checked={selectedProjects.includes(project.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedProjects([...selectedProjects, project.id]);
+                            } else {
+                              setSelectedProjects(selectedProjects.filter(id => id !== project.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600"
+                        />
+                        <span className="text-sm text-gray-900 dark:text-gray-100">
+                          {project.domain} {project.customer_name && `(${project.customer_name})`}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => setSelectedProjects(projects.map(p => p.id))}
+                  className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                >
+                  Tout sélectionner
+                </button>
+                <span className="text-gray-400">|</span>
+                <button
+                  onClick={() => setSelectedProjects([])}
+                  className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                >
+                  Tout désélectionner
+                </button>
+              </div>
+            </div>
+
+            {/* Destinataires */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">
+                Destinataires (emails séparés par des virgules)
+              </label>
+              <textarea
+                value={recipients}
+                onChange={(e) => setRecipients(e.target.value)}
+                placeholder="Les emails des clients sélectionnés seront préremplis automatiquement"
+                className="input min-h-[100px]"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Les emails des clients des projets sélectionnés sont automatiquement ajoutés. Vous pouvez modifier ou ajouter d'autres emails.
+              </p>
+              {selectedProjects.length > 0 && (
+                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-300">
+                  💡 Astuce : Les emails des clients des projets sélectionnés sont automatiquement inclus. Vous pouvez les modifier ou en ajouter d'autres.
+                </div>
+              )}
+            </div>
+
+            {/* Sujet personnalisé (optionnel) */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">
+                Sujet personnalisé (optionnel)
+              </label>
+              <input
+                type="text"
+                value={customSubject}
+                onChange={(e) => setCustomSubject(e.target.value)}
+                placeholder="Laissez vide pour utiliser le sujet par défaut"
+                className="input"
+              />
+            </div>
+
+            {/* Bouton d'envoi */}
+            <button
+              onClick={handleSendReport}
+              disabled={sending || selectedProjects.length === 0 || !recipients.trim()}
+              className="btn btn-primary flex items-center gap-2 w-full sm:w-auto"
+            >
+              <Send size={18} />
+              {sending ? 'Envoi en cours...' : 'Envoyer le rapport'}
+            </button>
+
+            {/* Résultat de l'envoi */}
+            {sendResult && (
+              <div className={`mt-4 p-4 rounded-lg ${
+                sendResult.success 
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' 
+                  : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+              }`}>
+                <p className={`font-medium ${
+                  sendResult.success 
+                    ? 'text-green-900 dark:text-green-300' 
+                    : 'text-yellow-900 dark:text-yellow-300'
+                }`}>
+                  {sendResult.success 
+                    ? `✅ ${sendResult.sent} rapport(s) envoyé(s) avec succès` 
+                    : `⚠️ ${sendResult.sent} envoyé(s), ${sendResult.failed} échec(s)`}
+                </p>
+                {sendResult.results && sendResult.results.length > 0 && (
+                  <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                    <p className="font-medium">Projets envoyés :</p>
+                    <ul className="list-disc list-inside mt-1">
+                      {sendResult.results.map((r: any, idx: number) => (
+                        <li key={idx}>{r.domain} - {r.recipientsCount} destinataire(s)</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {sendResult.errors && sendResult.errors.length > 0 && (
+                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                    <p className="font-medium">Erreurs :</p>
+                    <ul className="list-disc list-inside mt-1">
+                      {sendResult.errors.map((e: any, idx: number) => (
+                        <li key={idx}>{e.domain || `Projet ${e.projectId}`}: {e.error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Contenu de l'onglet Templates */}
+      {activeTab === 'templates' && (
+        <div>
       {/* Sélection du type de rapport */}
       <div className="card mb-6">
         <div className="flex items-center gap-4">
@@ -275,6 +553,8 @@ export default function Reports() {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }

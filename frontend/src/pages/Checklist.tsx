@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from '../utils/api';
-import { Plus, Check, X, Trash2, Edit2, Calendar, Filter } from 'lucide-react';
+import { Plus, Check, Trash2, Edit2, Calendar, Filter } from 'lucide-react';
 
 interface ChecklistItem {
   id: number;

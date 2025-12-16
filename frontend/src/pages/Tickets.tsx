@@ -19,7 +19,6 @@ export default function Tickets() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -150,7 +149,7 @@ export default function Tickets() {
           <div
             key={ticket.id}
             className="card cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => setSelectedTicket(ticket)}
+            onClick={() => handleEdit(ticket)}
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">

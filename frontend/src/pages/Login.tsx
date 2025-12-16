@@ -1,15 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { LogIn } from 'lucide-react';
+import { LogIn, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [logoAnimation, setLogoAnimation] = useState(false);
   const { login } = useAuthStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Démarrer l'animation après un court délai
+    const timer = setTimeout(() => {
+      setLogoAnimation(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,8 +40,76 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-2">WeBoost</h1>
-          <p className="text-gray-600 dark:text-gray-400">Gestion de Sites Internet</p>
+          <div className="flex justify-center mb-4">
+            <div 
+              className="text-5xl font-bold flex items-center"
+              style={{ 
+                fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                letterSpacing: '-0.5px',
+                height: '60px'
+              }}
+            >
+              {['W', 'e', 'b', 'o', 'o', 's', 't', '.'].map((letter, index) => {
+                const isW = letter === 'W';
+                const isDot = letter === '.';
+                const delay = index * 0.1; // Délai progressif de 0.1s par lettre
+                
+                return (
+                  <span
+                    key={index}
+                    className={`inline-block ${
+                      isW || isDot ? 'text-[#06b6d4]' : 'text-gray-900 dark:text-white'
+                    }`}
+                    style={{
+                      animation: logoAnimation 
+                        ? `letterDrop 0.6s ease-out ${delay}s both`
+                        : 'none',
+                      transform: logoAnimation ? 'translateY(0)' : 'translateY(-100px)',
+                      opacity: logoAnimation ? 1 : 0
+                    }}
+                  >
+                    {letter}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <p 
+            className="text-gray-600 dark:text-gray-400 text-sm"
+            style={{
+              animation: logoAnimation ? 'fadeIn 0.5s ease-out 0.8s both' : 'none',
+              opacity: logoAnimation ? 1 : 0
+            }}
+          >
+            Websites Manager
+          </p>
+          <style>{`
+            @keyframes letterDrop {
+              0% {
+                transform: translateY(-100px);
+                opacity: 0;
+              }
+              60% {
+                transform: translateY(10px);
+                opacity: 1;
+              }
+              80% {
+                transform: translateY(-5px);
+              }
+              100% {
+                transform: translateY(0);
+                opacity: 1;
+              }
+            }
+            @keyframes fadeIn {
+              from {
+                opacity: 0;
+              }
+              to {
+                opacity: 1;
+              }
+            }
+          `}</style>
         </div>
 
         <div className="card">
@@ -58,7 +136,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
                 required
-                placeholder="admin@weboost.com"
+                placeholder="exemple@exemple.com"
               />
             </div>
 
@@ -66,15 +144,30 @@ export default function Login() {
               <label htmlFor="password" className="block text-sm font-medium mb-2">
                 Mot de passe
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                required
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input pr-10"
+                  required
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none transition-colors"
+                  aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff size={20} />
+                  ) : (
+                    <Eye size={20} />
+                  )}
+                </button>
+              </div>
             </div>
 
             <button
@@ -85,14 +178,6 @@ export default function Login() {
               {loading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
-
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <p className="text-sm text-blue-800 dark:text-blue-300">
-              <strong>Compte par défaut :</strong><br />
-              Email: admin@weboost.com<br />
-              Mot de passe: admin123
-            </p>
-          </div>
         </div>
       </div>
     </div>

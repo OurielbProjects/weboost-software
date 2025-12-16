@@ -70,6 +70,74 @@ export async function analyzeSitePerformance(url: string, apiKey?: string): Prom
   }
 }
 
+// Fonction pour vérifier si un lien est un endpoint WordPress à ignorer (exportée pour utilisation ailleurs)
+export function isWordPressEndpoint(linkUrl: string): boolean {
+  try {
+    const url = new URL(linkUrl);
+    const pathname = url.pathname;
+    const fullPath = url.pathname + url.search; // Inclure les paramètres de requête
+    
+    // Patterns WordPress à ignorer (endpoints système du CMS)
+    // Ces endpoints font partie du système WordPress et ne doivent pas être considérés comme des liens cassés
+    const wordpressPatterns = [
+      /\/xmlrpc\.php/i,                    // xmlrpc.php avec ou sans paramètres (API XML-RPC)
+      /\/wp-json/i,                        // API REST WordPress
+      /\/wp-login\.php/i,                  // Page de connexion WordPress
+      /\/wp-admin/i,                       // Administration WordPress
+    ];
+    
+    // Vérifier sur le pathname et le chemin complet avec paramètres
+    return wordpressPatterns.some(pattern => pattern.test(pathname) || pattern.test(fullPath));
+  } catch (error) {
+    // Si l'URL est invalide, vérifier quand même sur la chaîne brute
+    const wordpressPatterns = [
+      /\/xmlrpc\.php/i,
+      /\/wp-json/i,
+      /\/wp-login\.php/i,
+      /\/wp-admin/i,
+    ];
+    return wordpressPatterns.some(pattern => pattern.test(linkUrl));
+  }
+}
+
+// Fonction pour vérifier si un lien est mal formé et doit être ignoré (exportée pour utilisation ailleurs)
+export function isMalformedLink(linkUrl: string, baseUrl: string): boolean {
+  try {
+    // Vérifier les liens avec double slash dans le pathname (ex: //fonts.googleapis.com)
+    // Cela crée des liens mal formés comme https://weboost-il.com//fonts.googleapis.com
+    if (linkUrl.match(/https?:\/\/[^\/]+\/\/[^\/]/)) {
+      return true;
+    }
+    
+    // Vérifier les liens qui contiennent des domaines externes mal construits dans le pathname
+    // Exemple: https://weboost-il.com//fonts.googleapis.com
+    const url = new URL(linkUrl);
+    const baseUrlObj = new URL(baseUrl);
+    
+    // Si le pathname commence par // suivi d'un nom de domaine (contient des points)
+    // C'est probablement un lien externe mal formé
+    if (url.pathname.match(/^\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)) {
+      return true;
+    }
+    
+    // Vérifier les liens avec des caractères suspects dans le pathname
+    if (url.pathname.includes('//')) {
+      return true;
+    }
+    
+    // Si le hostname est différent du hostname de base, c'est un lien externe
+    // On les ignore pour l'instant (on ne vérifie que les liens internes)
+    if (url.hostname !== baseUrlObj.hostname) {
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    // Si l'URL est invalide, c'est probablement un lien mal formé
+    return true;
+  }
+}
+
 // Fonction pour vérifier les liens cassés d'un site
 export async function checkBrokenLinks(url: string): Promise<any[]> {
   try {
@@ -93,6 +161,17 @@ export async function checkBrokenLinks(url: string): Promise<any[]> {
     while ((match = linkRegex.exec(html)) !== null) {
       let link = match[1];
       
+      // Ignorer les liens avec protocoles spéciaux (ne doivent pas être vérifiés)
+      const specialProtocols = ['tel:', 'mailto:', 'sms:', 'whatsapp:', 'skype:', 'viber:', 'javascript:'];
+      if (specialProtocols.some(protocol => link.toLowerCase().startsWith(protocol))) {
+        continue;
+      }
+      
+      // Ignorer les ancres (liens vers des sections de la même page)
+      if (link.startsWith('#')) {
+        continue;
+      }
+      
       // Convertir les liens relatifs en absolus
       if (link.startsWith('/')) {
         const urlObj = new URL(url);
@@ -110,11 +189,26 @@ export async function checkBrokenLinks(url: string): Promise<any[]> {
 
     // Vérifier chaque lien
     for (const link of links.slice(0, 50)) { // Limiter à 50 liens pour éviter les timeouts
+      // Ignorer les endpoints WordPress (système CMS)
+      if (isWordPressEndpoint(link)) {
+        continue;
+      }
+      
+      // Ignorer les liens mal formés
+      if (isMalformedLink(link, url)) {
+        continue;
+      }
+      
       try {
         const linkResponse = await axios.head(link, {
           timeout: 5000,
           validateStatus: (status) => status < 500, // Accepter les codes < 500
         });
+
+        // Ignorer les codes 403 pour les endpoints WordPress (même si le pattern n'a pas matché)
+        if (linkResponse.status === 403 && isWordPressEndpoint(link)) {
+          continue;
+        }
 
         if (linkResponse.status >= 400) {
           brokenLinks.push({
@@ -125,6 +219,11 @@ export async function checkBrokenLinks(url: string): Promise<any[]> {
           });
         }
       } catch (error: any) {
+        // Ignorer les erreurs pour les endpoints WordPress
+        if (isWordPressEndpoint(link)) {
+          continue;
+        }
+        
         brokenLinks.push({
           url: link,
           status: 0,
@@ -139,6 +238,55 @@ export async function checkBrokenLinks(url: string): Promise<any[]> {
     console.error('Error checking broken links:', error.message);
     return [];
   }
+}
+
+// Fonction pour vérifier si un lien utilise un protocole spécial à ignorer
+function isSpecialProtocolLink(linkUrl: string): boolean {
+  const specialProtocols = ['tel:', 'mailto:', 'sms:', 'whatsapp:', 'skype:', 'viber:', 'javascript:'];
+  const lowerLink = linkUrl.toLowerCase();
+  
+  // Vérifier les protocoles spéciaux
+  if (specialProtocols.some(protocol => lowerLink.startsWith(protocol))) {
+    return true;
+  }
+  
+  // Ignorer les ancres
+  if (linkUrl.startsWith('#')) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Fonction utilitaire pour filtrer les liens cassés existants (pour nettoyer la base de données)
+export function filterBrokenLinks(brokenLinks: any[], baseUrl: string): any[] {
+  if (!Array.isArray(brokenLinks)) {
+    return [];
+  }
+  
+  return brokenLinks.filter((link) => {
+    const linkUrl = typeof link === 'string' ? link : link.url;
+    if (!linkUrl) {
+      return false;
+    }
+    
+    // Ignorer les protocoles spéciaux (tel:, mailto:, etc.)
+    if (isSpecialProtocolLink(linkUrl)) {
+      return false;
+    }
+    
+    // Ignorer les endpoints WordPress
+    if (isWordPressEndpoint(linkUrl)) {
+      return false;
+    }
+    
+    // Ignorer les liens mal formés
+    if (isMalformedLink(linkUrl, baseUrl)) {
+      return false;
+    }
+    
+    return true;
+  });
 }
 
 // Fonction pour vérifier le statut du serveur

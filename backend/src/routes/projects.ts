@@ -1,7 +1,7 @@
 import express from 'express';
 import { pool } from '../database/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { updateProjectData } from '../services/analyzer';
+import { updateProjectData, filterBrokenLinks } from '../services/analyzer';
 
 const router = express.Router();
 
@@ -24,7 +24,19 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
     query += ` ORDER BY p.created_at DESC`;
 
     const result = await pool.query(query, params);
-    res.json({ projects: result.rows });
+    
+    // Filtrer les liens cassés pour chaque projet
+    const projects = result.rows.map((project: any) => {
+      if (project.broken_links && project.url) {
+        const brokenLinks = typeof project.broken_links === 'string' 
+          ? JSON.parse(project.broken_links) 
+          : project.broken_links;
+        project.broken_links = filterBrokenLinks(brokenLinks, project.url);
+      }
+      return project;
+    });
+    
+    res.json({ projects });
   } catch (error) {
     console.error('Get projects error:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -56,7 +68,16 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Projet non trouvé' });
     }
 
-    res.json({ project: result.rows[0] });
+    // Filtrer les liens cassés
+    const project = result.rows[0];
+    if (project.broken_links && project.url) {
+      const brokenLinks = typeof project.broken_links === 'string' 
+        ? JSON.parse(project.broken_links) 
+        : project.broken_links;
+      project.broken_links = filterBrokenLinks(brokenLinks, project.url);
+    }
+
+    res.json({ project });
   } catch (error) {
     console.error('Get project error:', error);
     res.status(500).json({ error: 'Erreur serveur' });

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from '../utils/api';
-import { ArrowLeft, ExternalLink, TrendingUp, AlertTriangle, Activity, Server, Link as LinkIcon, Gauge, Bell, Mail, Save } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { ArrowLeft, ExternalLink, TrendingUp, AlertTriangle, Activity, Server, Link as LinkIcon, Gauge, Bell, Mail } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface Project {
   id: number;
@@ -35,7 +35,7 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [_saving, setSaving] = useState(false);
   const [trafficFilter, setTrafficFilter] = useState<'today' | 'yesterday' | 'week' | 'month'>('today');
 
   const fetchProject = async () => {
@@ -44,12 +44,9 @@ export default function ProjectDetail() {
       const projectData = response.data.project;
       setProject(projectData);
       
-      // Vérifier si une analyse est en cours
-      if (!projectData.performance_data || Object.keys(projectData.performance_data).length === 0) {
-        setAnalyzing(true);
-      } else {
-        setAnalyzing(false);
-      }
+      // Ne plus lancer automatiquement l'analyse - les données sont mises à jour toutes les heures
+      // L'analyse manuelle reste disponible via le bouton
+      setAnalyzing(false);
     } catch (error) {
       console.error('Error fetching project:', error);
     } finally {
@@ -57,51 +54,13 @@ export default function ProjectDetail() {
     }
   };
 
-  const triggerAnalysis = async () => {
-    if (!id) return;
-    setAnalyzing(true);
-    try {
-      // Lancer l'analyse en arrière-plan
-      await axios.post(`/api/projects/${id}/analyze`);
-      // Attendre un peu puis rafraîchir les données périodiquement
-      let attempts = 0;
-      const maxAttempts = 30; // 30 tentatives = 90 secondes max (PageSpeed peut prendre du temps)
-      
-      const checkInterval = setInterval(async () => {
-        attempts++;
-        const response = await axios.get(`/api/projects/${id}`);
-        const projectData = response.data.project;
-        setProject(projectData);
-        
-        // Vérifier si les données sont maintenant disponibles
-        if (projectData && projectData.performance_data && Object.keys(projectData.performance_data).length > 0) {
-          clearInterval(checkInterval);
-          setAnalyzing(false);
-          console.log('✅ Données d\'analyse disponibles');
-        } else if (attempts >= maxAttempts) {
-          clearInterval(checkInterval);
-          setAnalyzing(false);
-          console.warn('⚠️ Analyse terminée mais données non disponibles après 90 secondes');
-        }
-      }, 3000);
-      
-      // Arrêter après 90 secondes maximum
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        setAnalyzing(false);
-      }, 90000);
-    } catch (error) {
-      console.error('Error triggering analysis:', error);
-      setAnalyzing(false);
-    }
-  };
 
   useEffect(() => {
     if (id) {
       fetchProject();
       fetchNotifications();
-      // Lancer l'analyse automatiquement
-      triggerAnalysis();
+      // Ne plus lancer l'analyse automatiquement - les données sont mises à jour toutes les heures
+      // L'utilisateur peut toujours lancer une analyse manuelle via le bouton si nécessaire
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -144,7 +103,7 @@ export default function ProjectDetail() {
 
   // Préparer les données pour les graphiques
   const trafficData = project.traffic_data?.history || [];
-  const performanceData = project.performance_data?.history || [];
+  // const performanceData = project.performance_data?.history || [];
 
   return (
     <div>

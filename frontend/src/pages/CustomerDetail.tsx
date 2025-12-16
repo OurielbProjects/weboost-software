@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from '../utils/api';
 import { 
   ArrowLeft, Mail, Phone, Globe, Calendar, FileText, MapPin, 
-  Building2, Upload, Download, Trash2, Edit2, Plus, Filter,
+  Building2, Download, Trash2, Edit2, Plus, Filter, Eye, X,
   CheckCircle, XCircle, Clock, Euro, Key, Save
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -56,6 +56,8 @@ export default function CustomerDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [savingApiKeys, setSavingApiKeys] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [invoiceViewerUrl, setInvoiceViewerUrl] = useState<string>('');
 
   // Filtres
   const [filters, setFilters] = useState({
@@ -215,6 +217,30 @@ export default function CustomerDetail() {
     }
   };
 
+  const handleViewInvoice = async (invoiceId: number) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (!invoice) return;
+      
+      // Charger le fichier en blob pour créer une URL d'objet pour la visualisation
+      const response = await axios.get(`/api/invoices/${invoiceId}/file?view=true`, {
+        responseType: 'blob',
+      });
+      
+      // Créer une URL d'objet pour la visualisation
+      const blob = new Blob([response.data], { 
+        type: response.headers['content-type'] || 'application/pdf' 
+      });
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      setInvoiceViewerUrl(blobUrl);
+      setViewingInvoice(invoice);
+    } catch (error) {
+      console.error('Error viewing invoice:', error);
+      alert('Erreur lors de l\'affichage de la facture');
+    }
+  };
+
   const handleDownloadInvoice = async (invoiceId: number) => {
     try {
       const invoice = invoices.find(inv => inv.id === invoiceId);
@@ -249,6 +275,20 @@ export default function CustomerDetail() {
       console.error('Error downloading invoice:', error);
       alert('Erreur lors du téléchargement de la facture');
     }
+  };
+
+  const getFileExtension = (filePath: string): string => {
+    if (!filePath) return 'pdf';
+    return filePath.split('.').pop()?.toLowerCase() || 'pdf';
+  };
+
+  const isImageFile = (filePath: string): boolean => {
+    const ext = getFileExtension(filePath);
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+  };
+
+  const isPdfFile = (filePath: string): boolean => {
+    return getFileExtension(filePath) === 'pdf';
   };
 
   const getStatusIcon = (status: string) => {
@@ -728,6 +768,13 @@ export default function CustomerDetail() {
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => handleViewInvoice(invoice.id)}
+                          className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300"
+                          title="Visualiser"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button
                           onClick={() => handleDownloadInvoice(invoice.id)}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                           title="Télécharger"
@@ -761,6 +808,84 @@ export default function CustomerDetail() {
           </div>
         )}
       </div>
+
+      {/* Modal pour visualiser une facture */}
+      {viewingInvoice && invoiceViewerUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-6xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  Facture {viewingInvoice.invoice_number}
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {new Date(viewingInvoice.invoice_date).toLocaleDateString('fr-FR')} - {parseFloat(viewingInvoice.amount.toString()).toFixed(2)} {viewingInvoice.currency}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadInvoice(viewingInvoice.id)}
+                  className="btn btn-secondary flex items-center gap-2"
+                  title="Télécharger"
+                >
+                  <Download size={18} />
+                  Télécharger
+                </button>
+                <button
+                  onClick={() => {
+                    // Révoquer l'URL d'objet pour libérer la mémoire
+                    if (invoiceViewerUrl && invoiceViewerUrl.startsWith('blob:')) {
+                      window.URL.revokeObjectURL(invoiceViewerUrl);
+                    }
+                    setViewingInvoice(null);
+                    setInvoiceViewerUrl('');
+                  }}
+                  className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Fermer"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+            
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-4">
+              {isImageFile(viewingInvoice.file_path) ? (
+                <div className="flex justify-center">
+                  <img
+                    src={invoiceViewerUrl}
+                    alt={`Facture ${viewingInvoice.invoice_number}`}
+                    className="max-w-full h-auto rounded-lg shadow-lg"
+                    style={{ maxHeight: 'calc(90vh - 120px)' }}
+                  />
+                </div>
+              ) : isPdfFile(viewingInvoice.file_path) ? (
+                <iframe
+                  src={invoiceViewerUrl}
+                  className="w-full rounded-lg shadow-lg"
+                  style={{ height: 'calc(90vh - 120px)', minHeight: '600px' }}
+                  title={`Facture ${viewingInvoice.invoice_number}`}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full py-12">
+                  <FileText size={64} className="text-gray-400 dark:text-gray-500 mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    Ce type de fichier ne peut pas être visualisé directement.
+                  </p>
+                  <button
+                    onClick={() => handleDownloadInvoice(viewingInvoice.id)}
+                    className="btn btn-primary flex items-center gap-2"
+                  >
+                    <Download size={18} />
+                    Télécharger pour voir
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal pour ajouter/modifier une facture */}
       {showInvoiceModal && user?.role === 'admin' && (
@@ -837,9 +962,9 @@ export default function CustomerDetail() {
                     onChange={(e) => setInvoiceForm({ ...invoiceForm, currency: e.target.value })}
                     className="input"
                   >
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                    <option value="GBP">GBP</option>
+                    <option value="EUR">EUR (Euro)</option>
+                    <option value="USD">USD (Dollar)</option>
+                    <option value="ILS">ILS (Shekel)</option>
                   </select>
                 </div>
               </div>

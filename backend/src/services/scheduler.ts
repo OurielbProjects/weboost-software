@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { pool } from '../database/connection';
 import { sendReportEmail, ReportData } from '../utils/email';
 import { generateReport } from '../utils/reportRenderer';
+import { updateProjectData } from './analyzer';
 
 // Fonction pour obtenir la date/heure en heure française
 function getFrenchTime(): Date {
@@ -182,7 +183,72 @@ cron.schedule('0 10 * * *', async () => {
   timezone: 'Europe/Paris'
 });
 
+// Fonction pour analyser automatiquement tous les projets actifs
+async function analyzeAllActiveProjects() {
+  try {
+    console.log('🔄 Démarrage de l\'analyse automatique de tous les projets actifs...');
+    
+    // Récupérer tous les projets actifs
+    const projectsResult = await pool.query(
+      `SELECT id, domain, url FROM projects WHERE status = 'active'`
+    );
+
+    if (projectsResult.rows.length === 0) {
+      console.log('   Aucun projet actif à analyser');
+      return;
+    }
+
+    console.log(`   ${projectsResult.rows.length} projet(s) actif(s) à analyser`);
+
+    // Analyser chaque projet en parallèle (avec une limite pour éviter la surcharge)
+    const BATCH_SIZE = 3; // Analyser 3 projets en parallèle à la fois
+    const projects = projectsResult.rows;
+
+    for (let i = 0; i < projects.length; i += BATCH_SIZE) {
+      const batch = projects.slice(i, i + BATCH_SIZE);
+      
+      // Analyser le batch en parallèle
+      await Promise.allSettled(
+        batch.map(async (project: any) => {
+          try {
+            console.log(`   🔍 Analyse de ${project.domain} (ID: ${project.id})...`);
+            await updateProjectData(project.id);
+            console.log(`   ✅ ${project.domain} analysé avec succès`);
+          } catch (error: any) {
+            console.error(`   ❌ Erreur lors de l'analyse de ${project.domain}:`, error.message);
+          }
+        })
+      );
+
+      // Attendre un peu entre les batches pour éviter la surcharge
+      if (i + BATCH_SIZE < projects.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 secondes entre les batches
+      }
+    }
+
+    console.log('✅ Analyse automatique terminée');
+  } catch (error: any) {
+    console.error('❌ Erreur lors de l\'analyse automatique des projets:', error.message);
+  }
+}
+
+// Planifier l'analyse automatique toutes les heures
+// S'exécute à la minute 0 de chaque heure (ex: 00:00, 01:00, 02:00, etc.)
+cron.schedule('0 * * * *', async () => {
+  console.log('⏰ Exécution de l\'analyse automatique horaire des projets');
+  await analyzeAllActiveProjects();
+}, {
+  timezone: 'Europe/Paris'
+});
+
+// Exécuter une analyse immédiate au démarrage du serveur (après 30 secondes pour laisser le temps au serveur de démarrer)
+setTimeout(async () => {
+  console.log('🚀 Analyse initiale des projets au démarrage...');
+  await analyzeAllActiveProjects();
+}, 30000); // 30 secondes après le démarrage
+
 console.log('✅ Planificateur de notifications initialisé');
+console.log('   - Analyse automatique : Toutes les heures (minute 0)');
 console.log('   - Quotidien : 08:00 heure française');
 console.log('   - Hebdomadaire : Dimanche 08:00 heure française');
 console.log('   - Mensuel : Premier jour du mois 10:00 heure française');

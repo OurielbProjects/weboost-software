@@ -7,9 +7,27 @@ import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
+// Configuration du storage multer pour préserver les extensions
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/invoices/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // Préserver l'extension originale du fichier
+    const ext = path.extname(file.originalname);
+    // Générer un nom unique avec timestamp + extension
+    const uniqueName = `invoice-${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
+    cb(null, uniqueName);
+  }
+});
+
 // Configuration multer pour upload de factures
 const upload = multer({
-  dest: 'uploads/invoices/',
+  storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
     const allowedTypes = /pdf|doc|docx|jpg|jpeg|png/;
@@ -296,10 +314,11 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) 
   }
 });
 
-// Download invoice file
+// Download or view invoice file
 router.get('/:id/file', authenticate, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
+    const { view } = req.query; // Si view=true, afficher inline au lieu de télécharger
 
     const result = await pool.query(
       `SELECT i.*, c.created_by, c.user_id 
@@ -326,11 +345,49 @@ router.get('/:id/file', authenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Fichier non trouvé' });
     }
 
+    // Déterminer l'extension du fichier
+    const fileExt = path.extname(invoice.file_path).toLowerCase();
+    
+    // Si le fichier n'a pas d'extension (anciens fichiers), essayer de détecter depuis le chemin
+    // ou utiliser .pdf par défaut
+    let finalExt = fileExt;
+    if (!finalExt || finalExt === '') {
+      // Essayer de détecter depuis le nom de fichier dans file_path
+      const fileNameMatch = invoice.file_path.match(/\.([^.]+)$/);
+      if (fileNameMatch) {
+        finalExt = '.' + fileNameMatch[1].toLowerCase();
+      } else {
+        // Par défaut, supposer PDF
+        finalExt = '.pdf';
+      }
+    }
+    
     // Déterminer le nom du fichier avec l'extension appropriée
-    const fileExt = path.extname(invoice.file_path);
-    const fileName = `${invoice.invoice_number || `invoice-${invoice.id}`}${fileExt}`;
+    const safeInvoiceNumber = (invoice.invoice_number || `invoice-${invoice.id}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `${safeInvoiceNumber}${finalExt}`;
 
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    // Déterminer le type MIME
+    const mimeTypes: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    const contentType = mimeTypes[finalExt] || 'application/octet-stream';
+    
+    // Encoder le nom de fichier pour Content-Disposition (RFC 5987)
+    const encodedFileName = encodeURIComponent(fileName);
+    const contentDispositionValue = view === 'true' 
+      ? `inline; filename="${fileName}"; filename*=UTF-8''${encodedFileName}`
+      : `attachment; filename="${fileName}"; filename*=UTF-8''${encodedFileName}`;
+    
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', contentDispositionValue);
+    
     res.sendFile(path.resolve(invoice.file_path));
   } catch (error) {
     console.error('Download invoice error:', error);

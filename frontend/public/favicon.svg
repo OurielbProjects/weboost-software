@@ -1,0 +1,23 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradW" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="50%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+    <linearGradient id="gradSignal" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <path d="M14 14 Q20 20 26 14" stroke="url(#gradSignal)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M11 10 Q20 24 29 10" stroke="url(#gradSignal)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M8 6 Q20 28 32 6" stroke="url(#gradSignal)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M14 24 L18 50 L24 32 L30 50 L34 24" fill="url(#gradW)" stroke="none"/>
+  <circle cx="45" cy="44" r="10" fill="none" stroke="#06b6d4" stroke-width="3"/>
+  <circle cx="45" cy="44" r="3" fill="#06b6d4"/>
+</svg>
+
+
+

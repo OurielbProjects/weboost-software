@@ -2,6 +2,8 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import { pool } from '../database/connection';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth';
+import { validatePasswordStrength } from '../middleware/passwordPolicy';
+import { logSecurityEvent } from '../middleware/security';
 
 const router = express.Router();
 
@@ -53,12 +55,29 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Valider la force du mot de passe
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ 
+        error: 'Mot de passe trop faible',
+        details: passwordValidation.errors
+      });
+    }
+
+    // Valider l'email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Format d\'email invalide' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
     
     const result = await pool.query(
       'INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role, created_at',
-      [email, hashedPassword, name, role]
+      [email.toLowerCase().trim(), hashedPassword, name.trim(), role]
     );
+
+    logSecurityEvent('USER_CREATED', { email, userId: result.rows[0].id, role, createdBy: req.userId });
 
     res.status(201).json({ user: result.rows[0] });
   } catch (error: any) {
@@ -94,9 +113,18 @@ router.put('/:id', authenticate, async (req: AuthRequest, res) => {
       values.push(name);
     }
     if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
+      // Valider la force du mot de passe lors de la modification
+      const passwordValidation = validatePasswordStrength(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({ 
+          error: 'Mot de passe trop faible',
+          details: passwordValidation.errors
+        });
+      }
+      const hashedPassword = await bcrypt.hash(password, 12);
       updates.push(`password = $${paramCount++}`);
       values.push(hashedPassword);
+      logSecurityEvent('PASSWORD_CHANGED', { userId: id, changedBy: req.userId });
     }
     if (role && req.userRole === 'admin') {
       updates.push(`role = $${paramCount++}`);
