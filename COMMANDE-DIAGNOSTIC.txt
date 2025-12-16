@@ -1,0 +1,31 @@
+# Commande de diagnostic complète à exécuter sur le serveur
+
+ssh root@51.15.254.112
+
+# Puis exécutez :
+
+cd /var/www/weboost/backend
+
+# Exécuter le diagnostic complet
+node scripts/diagnostic-complet.js
+
+# OU si le script n'existe pas encore, copiez-collez le contenu directement :
+
+# Après le diagnostic, vérifiez aussi :
+
+# 1. Vérifier que le backend tourne
+pm2 status
+
+# 2. Vérifier les logs récents
+pm2 logs weboost-backend --lines 30
+
+# 3. Tester l'API directement
+curl http://localhost:5000/api/health
+
+# 4. Tester la connexion
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@weboost.com","password":"Admin@weBoost123"}'
+
+# Partagez les résultats de toutes ces commandes pour que je puisse identifier le problème exact
+

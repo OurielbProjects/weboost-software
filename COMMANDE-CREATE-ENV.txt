@@ -1,0 +1,38 @@
+# Commandes pour créer le fichier .env sur le serveur
+
+ssh root@51.15.254.112
+
+# Puis exécutez ces commandes :
+
+cd /var/www/weboost/backend
+
+# Créer le fichier .env avec les valeurs par défaut
+# (Ajustez les valeurs selon votre configuration PostgreSQL)
+
+cat > .env << 'ENVEOF'
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=weboost
+DB_USER=postgres
+DB_PASSWORD=votre_mot_de_passe_postgres_ici
+JWT_SECRET=$(openssl rand -base64 32)
+FRONTEND_URL=http://51.15.254.112
+PORT=5000
+NODE_ENV=production
+ENVEOF
+
+# Générer le JWT_SECRET et le mettre dans .env
+JWT_SECRET=$(openssl rand -base64 32)
+sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" .env
+
+# IMPORTANT: Modifiez le mot de passe PostgreSQL dans .env
+nano .env
+# Ou utilisez vi: vi .env
+# Remplacez "votre_mot_de_passe_postgres_ici" par votre vrai mot de passe PostgreSQL
+
+# Redémarrer le backend
+pm2 restart weboost-backend
+
+# Vérifier les logs
+pm2 logs weboost-backend --lines 20
+

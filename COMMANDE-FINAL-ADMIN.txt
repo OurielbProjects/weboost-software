@@ -1,0 +1,93 @@
+# Commande finale pour créer l'admin maintenant que .env existe
+
+ssh root@51.15.254.112
+
+# Puis exécutez :
+
+cd /var/www/weboost/backend
+
+# Créer/réinitialiser l'admin
+node << 'EOF'
+require('dotenv').config();
+const bcrypt = require('bcryptjs');
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  database: process.env.DB_NAME || 'weboost',
+  user: process.env.DB_USER || 'postgres',
+  password: String(process.env.DB_PASSWORD || 'postgres'),
+});
+
+(async () => {
+  try {
+    console.log('🔍 Connexion à la base de données...');
+    await pool.query('SELECT 1');
+    console.log('✅ Connexion réussie');
+    
+    const email = 'admin@weboost.com';
+    const password = 'Admin@weBoost123';
+    const hashedPassword = await bcrypt.hash(password, 12);
+    
+    const check = await pool.query('SELECT id, email, name, role FROM users WHERE email = $1', [email]);
+    
+    if (check.rows.length === 0) {
+      console.log('📝 Création de l\'utilisateur admin...');
+      const result = await pool.query(
+        'INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role',
+        [email, hashedPassword, 'Administrateur', 'admin']
+      );
+      console.log('✅ Admin créé avec succès!');
+      console.log('   ID:', result.rows[0].id);
+      console.log('   Email:', result.rows[0].email);
+      console.log('   Nom:', result.rows[0].name);
+      console.log('   Rôle:', result.rows[0].role);
+    } else {
+      console.log('🔄 Mise à jour du mot de passe admin...');
+      console.log('   Utilisateur existant (ID:', check.rows[0].id + ')');
+      await pool.query('UPDATE users SET password = $1 WHERE email = $2', [hashedPassword, email]);
+      console.log('✅ Mot de passe mis à jour avec succès!');
+      
+      // Vérifier que le mot de passe fonctionne
+      const verify = await pool.query('SELECT password FROM users WHERE email = $1', [email]);
+      const isValid = await bcrypt.compare(password, verify.rows[0].password);
+      if (isValid) {
+        console.log('✅ Vérification: Le mot de passe est valide');
+      } else {
+        console.log('❌ ERREUR: Le mot de passe ne correspond pas!');
+      }
+    }
+    
+    console.log('');
+    console.log('📝 Identifiants de connexion:');
+    console.log('   Email: admin@weboost.com');
+    console.log('   Mot de passe: Admin@weBoost123');
+    
+    await pool.end();
+    process.exit(0);
+  } catch (e) {
+    console.error('❌ Erreur:', e.message);
+    console.error('   Code:', e.code);
+    if (e.code === '28P01') {
+      console.error('   💡 Le mot de passe PostgreSQL est incorrect.');
+      console.error('   💡 Vérifiez DB_PASSWORD dans le fichier .env');
+    } else if (e.code === '3D000') {
+      console.error('   💡 La base de données n\'existe pas.');
+      console.error('   💡 Créez-la avec: npm run create-db');
+    } else if (e.code === 'ECONNREFUSED') {
+      console.error('   💡 PostgreSQL n\'est pas démarré ou les paramètres sont incorrects.');
+    }
+    await pool.end();
+    process.exit(1);
+  }
+})();
+EOF
+
+# Redémarrer le backend
+pm2 restart weboost-backend
+
+# Attendre un peu et vérifier les logs
+sleep 5
+pm2 logs weboost-backend --lines 15
+

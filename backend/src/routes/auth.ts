@@ -193,6 +193,51 @@ router.post('/emergency-reset-lockouts', async (req, res) => {
   }
 });
 
+// Emergency reset admin password (public endpoint with secret)
+// Usage: POST /api/auth/emergency-reset-admin
+// Body: { secret: "RESET_ADMIN_2024", email: "admin@weboost.com", password: "Admin@weBoost123" }
+router.post('/emergency-reset-admin', async (req, res) => {
+  try {
+    const { secret, email = 'admin@weboost.com', password = 'Admin@weBoost123' } = req.body;
+    const expectedSecret = process.env.RESET_ADMIN_SECRET || 'RESET_ADMIN_2024';
+    
+    if (secret !== expectedSecret) {
+      return res.status(401).json({ error: 'Secret invalide' });
+    }
+
+    // Vérifier si l'utilisateur existe
+    const userResult = await pool.query('SELECT id, email, role FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+    
+    const hashedPassword = await bcrypt.hash(password, 12);
+    
+    if (userResult.rows.length === 0) {
+      // Créer l'utilisateur s'il n'existe pas
+      await pool.query(
+        'INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4)',
+        [email.toLowerCase().trim(), hashedPassword, 'Administrateur', 'admin']
+      );
+      logSecurityEvent('ADMIN_CREATED_EMERGENCY', { email, ip: req.ip });
+      res.json({ 
+        message: 'Utilisateur admin créé avec succès',
+        email,
+        password: 'Le mot de passe fourni a été défini'
+      });
+    } else {
+      // Mettre à jour le mot de passe
+      await pool.query('UPDATE users SET password = $1 WHERE email = $2', [hashedPassword, email.toLowerCase().trim()]);
+      logSecurityEvent('ADMIN_PASSWORD_RESET_EMERGENCY', { email, userId: userResult.rows[0].id, ip: req.ip });
+      res.json({ 
+        message: 'Mot de passe admin réinitialisé avec succès',
+        email,
+        password: 'Le mot de passe fourni a été défini'
+      });
+    }
+  } catch (error) {
+    console.error('Emergency reset admin error:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 export default router;
 
 

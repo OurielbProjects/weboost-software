@@ -1,0 +1,33 @@
+# Commandes à exécuter sur le serveur pour corriger le JWT_SECRET
+
+ssh root@51.15.254.112
+
+# Puis exécutez ces commandes :
+
+cd /var/www/weboost/backend
+
+# Générer un JWT_SECRET
+JWT_SECRET=$(openssl rand -base64 32)
+
+# Ajouter ou mettre à jour dans .env
+if grep -q "JWT_SECRET=" .env; then
+    sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" .env
+    echo "✅ JWT_SECRET mis à jour"
+else
+    echo "" >> .env
+    echo "JWT_SECRET=$JWT_SECRET" >> .env
+    echo "✅ JWT_SECRET ajouté"
+fi
+
+# Redémarrer le backend
+pm2 restart weboost-backend
+
+# Vérifier que ça fonctionne
+pm2 status
+pm2 logs weboost-backend --lines 10
+
+# Si tout est OK, vous devriez voir "Server running on port 5000"
+# Et vous pourrez vous connecter avec:
+# Email: admin@weboost.com
+# Mot de passe: Admin@weBoost123
+

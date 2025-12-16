@@ -1,0 +1,21 @@
+# Commande complète à exécuter sur le serveur
+
+ssh root@51.15.254.112
+
+# Puis exécutez cette commande :
+
+cd /var/www/weboost/backend && npm run fix-admin
+
+# Si la commande npm ne fonctionne pas, exécutez directement :
+
+cd /var/www/weboost/backend && node scripts/diagnose-and-fix-admin.js
+
+# Après avoir créé l'admin, redémarrez le backend :
+
+pm2 restart weboost-backend
+
+# Vérifiez que tout fonctionne :
+
+pm2 status
+pm2 logs weboost-backend --lines 20
+
