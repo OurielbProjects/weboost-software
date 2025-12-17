@@ -8,23 +8,23 @@
   }
   
   html {
-    overflow-x: hidden;
     width: 100%;
+    overflow-x: hidden;
   }
   
   body {
     @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
     width: 100%;
+    overflow-x: hidden;
   }
   
   #root {
     width: 100%;
-    overflow-x: hidden;
     margin: 0;
     padding: 0;
+    position: relative;
   }
 }
 
