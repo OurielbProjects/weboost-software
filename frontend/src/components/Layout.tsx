@@ -150,10 +150,10 @@ export default function Layout() {
       )}
 
       {/* Desktop Layout Container */}
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col lg:flex-row">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col lg:flex-row w-full">
         {/* Sidebar - Hidden on mobile when closed */}
         <aside
-          className={`fixed lg:static top-0 left-0 z-40 lg:z-auto w-64 h-screen lg:h-auto lg:min-h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform lg:transform-none transition-transform duration-300 ease-in-out flex-shrink-0 ${
+          className={`fixed lg:static top-14 lg:top-0 left-0 z-40 lg:z-auto w-64 h-[calc(100vh-56px)] lg:h-auto lg:min-h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform lg:transform-none transition-transform duration-300 ease-in-out flex-shrink-0 ${
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
         >
@@ -212,7 +212,7 @@ export default function Layout() {
         </aside>
 
         {/* Main content area */}
-        <main className="flex-1 pt-14 lg:pt-0 p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-screen">
+        <main className="flex-1 pt-14 lg:pt-0 p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-screen w-full lg:min-w-0">
           <Outlet />
         </main>
       </div>
