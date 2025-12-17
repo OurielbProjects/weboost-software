@@ -153,7 +153,7 @@ export default function Layout() {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col lg:flex-row w-full">
         {/* Sidebar - Hidden on mobile when closed */}
         <aside
-          className={`fixed lg:static top-14 lg:top-0 left-0 z-40 lg:z-auto w-64 h-[calc(100vh-56px)] lg:h-auto lg:min-h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform lg:transform-none transition-transform duration-300 ease-in-out flex-shrink-0 ${
+          className={`fixed lg:static top-14 lg:top-0 left-0 z-[60] lg:z-auto w-64 h-[calc(100vh-56px)] lg:h-auto lg:min-h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform lg:transform-none transition-transform duration-300 ease-in-out flex-shrink-0 ${
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
         >
@@ -163,7 +163,7 @@ export default function Layout() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Websites Manager</p>
             </div>
 
-            <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+            <nav className="flex-1 px-4 pb-4 space-y-2 overflow-y-auto lg:pt-4" style={{ paddingTop: '2rem' }}>
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
